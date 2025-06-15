@@ -1,47 +1,56 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const Person = require("./models/person");
 const morgan = require("morgan");
+const mongoose = require("mongoose");
+const Person = require("./models/person");
 
 const app = express();
+
 app.use(cors());
+app.use(express.json());
+app.use(express.static("dist"));
 
-let persons = [];
-
+morgan.token("body", (req) => JSON.stringify(req.body));
 app.use(
   morgan(":method :url :status :res[content-length] - :response-time ms :body")
 );
 
-morgan.token("body", (req) => JSON.stringify(req.body));
+const url = process.env.MONGODB_URI;
+mongoose.set("strictQuery", false);
+console.log("connecting to", url);
+mongoose
+  .connect(url)
+  .then(() => {
+    console.log("connected to MongoDB");
+  })
+  .catch((error) => {
+    console.error("error connecting to MongoDB:", error.message);
+  });
 
-app.use(express.static("dist"));
-app.use(express.json());
-
-app.get("/api/persons", (request, response) => {
+// GET all persons
+app.get("/api/persons", (request, response, next) => {
   Person.find({})
-    .then((result) => {
-      persons = result;
-      response.json(persons);
+    .then((persons) => response.json(persons))
+    .catch((error) => next(error));
+});
+
+// GET info
+app.get("/info", (request, response, next) => {
+  Person.countDocuments({})
+    .then((count) => {
+      response.send(`
+        <div>
+          <h3>Phonebook has info for ${count} people.</h3>
+          <h4>${new Date()}</h4>
+        </div>
+      `);
     })
-    .catch((error) => {
-      console.error("Error fetching persons:", error);
-      response.status(500).send({ error: "Failed to fetch persons" });
-    });
+    .catch((error) => next(error));
 });
 
-app.get("/info", (request, response) => {
-  const date = new Date();
-  let personsCount = persons.length;
-  response.send(`
-    <div>
-    <h3>Phonebook has info for ${personsCount} people.</h3>
-    <h4>${date}</h4>
-    </div>
-    `);
-});
-
-app.get("/api/persons/:id", (request, response) => {
+// GET a single person
+app.get("/api/persons/:id", (request, response, next) => {
   Person.findById(request.params.id)
     .then((person) => {
       if (person) {
@@ -51,94 +60,88 @@ app.get("/api/persons/:id", (request, response) => {
       }
     })
     .catch((error) => {
-      console.error("Error fetching person:", error);
-      response.status(500).send({ error: "Failed to fetch person" });
+      next(error);
     });
 });
 
-app.delete("/api/persons/:id", (request, response) => {
+// DELETE a person
+app.delete("/api/persons/:id", (request, response, next) => {
   Person.findByIdAndRemove(request.params.id)
     .then((result) => {
       if (result) {
-        persons = persons.filter((person) => person.id !== request.params.id);
         response.status(204).end();
       } else {
         response.status(404).json({ error: "Person not found" });
       }
     })
-    .catch((error) => {
-      console.error("Error deleting person:", error);
-      response.status(500).send({ error: "Failed to delete person" });
-    });
+    .catch((error) => next(error));
 });
 
-// const generateId = () => {
-//   let maxId =
-//     persons.length > 0
-//       ? Math.max(...persons.map((person) => Number(person.id)))
-//       : 0;
-//   return String(maxId + 1);
-// };
-app.post("/api/persons", (request, response) => {
+// POST a new person
+app.post("/api/persons", (request, response, next) => {
   const body = request.body;
 
   if (!body.name || !body.number) {
-    return response.status(204).json({
+    return response.status(400).json({
       error: "name or number is missing!",
     });
   }
 
-  const nameExists = persons.some((person) => person.name === body.name);
-
-  if (nameExists) {
-    return response.status(409).json({
-      error: "Name must be unique!",
-    });
-  } else {
-    const person = new Person({
-      // id: generateId(),
-      name: body.name,
-      number: body.number,
-    });
-    person
-      .save()
-      .then((savedPerson) => {
-        persons = persons.concat(savedPerson);
-        response.json(savedPerson);
-      })
-      .catch((error) => {
-        console.error("Error saving person:", error);
-        response.status(500).send({ error: "Failed to save person" });
+  Person.findOne({ name: body.name })
+    .then((existingPerson) => {
+      if (existingPerson) {
+        return response.status(409).json({
+          error: "Name must be unique!",
+        });
+      }
+      const person = new Person({
+        name: body.name,
+        number: body.number,
       });
-  }
+      return person.save().then((savedPerson) => {
+        response.json(savedPerson);
+      });
+    })
+    .catch((error) => next(error));
 });
 
-const requestLogger = (request, response, next) => {
-  console.log("Method:", request.method);
-  console.log("Path:  ", request.path);
-  console.log("Body:  ", request.body);
-  console.log("---");
-  next();
-};
-app.use(requestLogger);
+// PUT (update) a person
+app.put("/api/persons/:id", (request, response, next) => {
+  const { name, number } = request.body;
 
-const unknownEndpoint = (request, response) => {
+  Person.findByIdAndUpdate(
+    request.params.id,
+    { name, number },
+    { new: true, runValidators: true, context: "query" }
+  )
+    .then((updatedPerson) => {
+      if (updatedPerson) {
+        response.json(updatedPerson);
+      } else {
+        response.status(404).json({ error: "Person not found" });
+      }
+    })
+    .catch((error) => next(error));
+});
+
+// Unknown endpoint middleware
+app.use((request, response) => {
   response.status(404).send({ error: "unknown endpoint" });
-};
-
-app.use(unknownEndpoint);
+});
 
 // Error handler middleware
-const errorHandler = (error, request, response, next) => {
+app.use((error, request, response, next) => {
   console.error(error.message);
 
   if (error.name === "CastError") {
     return response.status(400).send({ error: "malformatted id" });
   }
+  if (error.name === "ValidationError") {
+    return response.status(400).json({ error: error.message });
+  }
 
   next(error);
-};
-app.use(errorHandler);
+});
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {
