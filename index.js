@@ -15,7 +15,6 @@ app.use(
 
 morgan.token("body", (req) => JSON.stringify(req.body));
 
-app.use(requestLogger);
 app.use(express.static("dist"));
 app.use(express.json());
 
