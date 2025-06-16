@@ -65,14 +65,17 @@ app.get("/api/persons/:id", (request, response, next) => {
 });
 
 // DELETE a person
-app.delete("/api/persons/:id", (request, response, next) => {
-  console.log("Attempting to delete ID:", request.params.id);
-  Person.findByIdAndRemove(request.params.id)
+app.delete("/api/persons/:id", (req, res, next) => {
+  // console.log("typeof Person.findByIdAndDelete:",
+  //   typeof Person.findByIdAndDelete
+  // );
+  // console.log("Person model keys:", Object.keys(Person));
+  Person.findByIdAndDelete(req.params.id)
     .then((result) => {
       if (result) {
-        response.status(204).end();
+        res.status(204).end();
       } else {
-        response.status(404).json({ error: "Person not found" });
+        res.status(404).send({ error: "Person not found" });
       }
     })
     .catch((error) => next(error));
