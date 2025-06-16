@@ -66,6 +66,7 @@ app.get("/api/persons/:id", (request, response, next) => {
 
 // DELETE a person
 app.delete("/api/persons/:id", (request, response, next) => {
+  console.log("Attempting to delete ID:", request.params.id);
   Person.findByIdAndRemove(request.params.id)
     .then((result) => {
       if (result) {

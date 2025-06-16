@@ -5,16 +5,12 @@ const personSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    minlength: [
-      3,
-      function (props) {
-        return `Name must be at least 3 characters, got "${props.value}"`;
-      },
-    ],
+    minlength: [3, "Name must be at least 3 characters"],
   },
   number: {
     type: String,
     required: true,
+    minlength: [8, "Phone number must be at least 8 digits"],
   },
 });
 
