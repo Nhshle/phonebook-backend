@@ -77,7 +77,7 @@ app.delete("/api/persons/:id", (request, response, next) => {
     .catch((error) => next(error));
 });
 
-// POST a new person
+// Create a new person
 app.post("/api/persons", (request, response, next) => {
   const body = request.body;
 

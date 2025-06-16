@@ -5,6 +5,7 @@ const personSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
+    minLength: 3,
   },
   number: {
     type: String,
