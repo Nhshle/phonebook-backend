@@ -87,20 +87,16 @@ app.post("/api/persons", (request, response, next) => {
     });
   }
 
-  Person.findOne({ name: body.name })
-    .then((existingPerson) => {
-      if (existingPerson) {
-        return response.status(409).json({
-          error: "Name must be unique!",
-        });
-      }
-      const person = new Person({
-        name: body.name,
-        number: body.number,
-      });
-      return person.save().then((savedPerson) => {
-        response.json(savedPerson);
-      });
+  // Let Mongoose handle all validation, including uniqueness
+  const person = new Person({
+    name: body.name,
+    number: body.number,
+  });
+
+  person
+    .save()
+    .then((savedPerson) => {
+      response.json(savedPerson);
     })
     .catch((error) => next(error));
 });
@@ -138,6 +134,10 @@ app.use((error, request, response, next) => {
   }
   if (error.name === "ValidationError") {
     return response.status(400).json({ error: error.message });
+  }
+  if (error.name === "MongoServerError" && error.code === 11000) {
+    // Duplicate key error (unique violation)
+    return response.status(409).json({ error: "Name must be unique!" });
   }
 
   next(error);
